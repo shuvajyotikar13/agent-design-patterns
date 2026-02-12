@@ -1,5 +1,5 @@
 ---
-name: stateful_data_profiler
+name: stateful-data-profiler
 description: A smart data analysis tool that maintains a persistent cache of file profiles. It includes a reporting tool to view the cached knowledge base in a human-readable format.
 license: Apache-2.0
 compatibility: python3.10+
