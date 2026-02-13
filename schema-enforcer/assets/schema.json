@@ -1,0 +1,32 @@
+{
+  "fields": [
+    {
+      "name": "host",
+      "type": "string",
+      "required": true,
+      "default": "localhost"
+    },
+    {
+      "name": "port",
+      "type": "integer",
+      "required": true,
+      "default": 8080
+    },
+    {
+      "name": "database_name",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "enable_logging",
+      "type": "boolean",
+      "required": false,
+      "default": true
+    },
+    {
+      "name": "tags",
+      "type": "list",
+      "required": true
+    }
+  ]
+}
