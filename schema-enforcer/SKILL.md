@@ -1,5 +1,5 @@
 ---
-name: schem-enforcer
+name: schema-enforcer
 description: A dual-purpose data engine that strictly validates input JSON against a schema AND synthesizes complete, production-ready json objects for a given schema. It enforces type safety while automatically populating missing mandatory and optional fields with schema-defined defaults.
 ---
 
