@@ -1,6 +1,6 @@
 ---
-name: resilient_config_patcher
-description: A fault-tolerant file writer that enforces valid JSON and fuxes invalid JSON.
+name: resilient-config-patcher
+description: Validates, formats, and patches JSON configuration files with syntax error correction. Use this skill to inspect repositories for invalid JSON, lint file structures, recursively scan directories for config errors, or safely write updates to JSON data. It enforces strict syntax compliance and auto-heals malformed structures.
 license: Apache-2.0
 metadata:
   author: sands
