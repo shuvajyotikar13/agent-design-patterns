@@ -2,7 +2,7 @@
 # =============================================================================
 # COMPONENT: S.A.N.D.S. REPAIR AGENT
 # -----------------------------------------------------------------------------
-# Copyright 2026 Shuva Jyoti Kar & Shruti Mantri
+# Copyright 2026 Shuva Jyoti Kar 
 # License: Apache 2.0
 
 import json
