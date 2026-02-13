@@ -4,7 +4,7 @@
 
 A collection of enterprise-grade **Agent Skills** designed to equip LLMs with the procedural knowledge required for complex, high-stakes workflows. These patterns transform raw model intelligence into reliable engineering outcomes.
 
-*Maintained by [@shuvajyotikar13](https://github.com/shuvajyotikar13) & [@shrutimantri](https://github.com/shrutimantri).*
+*Maintained by [@shuvajyotikar13](https://github.com/shuvajyotikar13)*
 
 ---
 
@@ -61,7 +61,7 @@ This project is a reference implementation for the Cognitive Patterns using Agen
 
 ### License
 Apache 2.0
-Copyright 2026[@shuvajyotikar13](https://github.com/shuvajyotikar13) & [@shrutimantri](https://github.com/shrutimantri).
+Copyright 2026[@shuvajyotikar13](https://github.com/shuvajyotikar13).
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0.
 
