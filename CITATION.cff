@@ -2,6 +2,5 @@ cff-version: 1.2.0
 message: "If you use these patterns, please cite the repository."
 authors:
   - alias: "@shuvajyotikar13"
-  - alias: "@shrutimantri"
 title: "Agent Design Patterns"
 url: "https://github.com/shuvajyotikar13/agent-design-patterns"
