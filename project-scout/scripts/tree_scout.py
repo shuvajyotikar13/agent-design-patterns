@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # =============================================================================
-# COMPONENT: stateful-data-profiler
+# COMPONENT: tree-scout
 # -----------------------------------------------------------------------------
 # Copyright 2026 Shuva Jyoti Kar
 # License: Apache 2.0
