@@ -5,65 +5,36 @@
 # Copyright 2026 Shuva Jyoti Kar 
 # License: Apache 2.0
 # =============================================================================
-#!/usr/bin/env python3
 """
 Resilient Schema Enforcer for Agentic Workflows
 ===============================================
 
 Overview:
 ---------
-This script is a fault-tolerant JSON parsing and patching utility designed 
-specifically for LLM-driven agentic workflows. Because Large Language Models 
-frequently hallucinate JSON structures, drop required fields, or mess up data types, 
-this script acts as a hard boundary.
-
-It guarantees that any JSON passing through it will be 100% compliant with the 
-target schema, automatically healing missing fields and casting incorrect types 
-before passing the data to downstream systems.
-
-Key Engineering Features:
--------------------------
-1. Deterministic Order Preservation: Guarantees the output JSON key order perfectly 
-   matches the sequence defined in the schema.
-2. Auto-Healing (Safe Defaults): Injects defaults for missing fields or type-safe 
-   nulls if no default is provided.
-3. Aggressive Type Casting: Converts hallucinated strings into required integers/booleans.
-4. Stream Separation (The Agentic Pattern):
-   - stdout: Contains ONLY the clean, valid JSON object.
-   - stderr: Contains the human/agent-readable "Enforcer Report".
-
-Behavioral Matrix:
-------------------
-| Scenario                   | Action Taken by Script                                 |
-|----------------------------|--------------------------------------------------------|
-| Missing Req Field          | Injects schema default or type-safe null. |
-| Missing Opt Field          | Injects schema default if defined.        |
-| Wrong Data Type            | Attempts to cast (e.g., "8080" -> 8080).       |
-| Uncastable Data Type       | Resets to schema default.                 |
-| Extra Hallucinated Fields  | Preserves and appends to the end of the JSON.  |
+This script acts as a hard boundary for LLM-generated JSON. It performs three
+distinct phases of validation:
+1. Heuristic Repair: Aggressively fixes common LLM syntax errors:
+   - Concatenated strings ("val""val")
+   - Missing commas between fields
+   - Trailing commas before closing braces
+   - Markdown code fences
+2. Syntax Validation: Ensures the input is structurally valid JSON.
+3. Schema Enforcement: Injects missing defaults and strictly enforces data 
+   types without overwriting valid existing values.
 
 Usage:
 ------
-python3 validate_and_fix_json.py --input '{"host": "localhost"}' --schema 'schema.json'
+python3 validate_and_fix_json.py --input '{"tags": ["a""b"],}' --schema 'schema.json'
 """
 
 import json
 import sys
 import argparse
 import os
+import re
 
 def get_safe_default(dtype):
-    """
-    Returns a type-safe empty value if no default is provided in the schema.
-    This prevents downstream strict-typed systems (like Go or Rust backends) 
-    from crashing on Null/None values.
-    
-    Args:
-        dtype (str): The expected data type from the schema.
-        
-    Returns:
-        The type-appropriate empty primitive (e.g., "" for string, 0 for int).
-    """
+    """Returns a type-safe empty value if no default is provided in the schema."""
     dtype = dtype.lower()
     if dtype == "string": return ""
     if dtype == "integer": return 0
@@ -73,13 +44,49 @@ def get_safe_default(dtype):
     if dtype == "dict": return {}
     return None
 
+def heuristic_repair(broken_json):
+    """
+    Attempts to fix common LLM JSON syntax errors using regex patterns.
+    """
+    text = broken_json.strip()
+    
+    # 1. Strip Markdown Code Blocks (```json ... ```)
+    if "```" in text:
+        pattern = r"```(?:json)?\s*([\s\S]*?)\s*```"
+        match = re.search(pattern, text)
+        if match:
+            text = match.group(1)
+
+    # 2. Fix Concatenated Strings (e.g., "production""web-tier")
+    # Logic: A quote, followed by optional whitespace, followed by another quote.
+    # We ignore ":" to avoid breaking key:value pairs.
+    text = re.sub(r'"\s*(?=")', '", ', text)
+
+    # 3. Fix Missing Commas between Values (e.g., 123 "key": val)
+    # Logic: End of a literal (digit, bool, null) followed by a quote (start of next key/val)
+    text = re.sub(r'(\d|true|false|null)\s*(?=")', r'\1, ', text)
+
+    # 4. Fix Trailing Commas (e.g., {"a": 1,})
+    # Logic: A comma followed immediately by a closing brace/bracket
+    text = re.sub(r',(\s*?[}\]])', r'\1', text)
+
+    # 5. Balance Braces (Simple Check)
+    # If we have more opens than closes, append them.
+    open_curly = text.count('{')
+    close_curly = text.count('}')
+    if open_curly > close_curly:
+        text += '}' * (open_curly - close_curly)
+        
+    open_square = text.count('[')
+    close_square = text.count(']')
+    if open_square > close_square:
+        text += ']' * (open_square - close_square)
+
+    return text
+
 def validate_and_fix(input_json_str, schema_path):
     """
-    Validates, patches, and formats a JSON string against a defined schema.
-    
-    Args:
-        input_json_str (str): The raw JSON string generated by the LLM.
-        schema_path (str): The file path to the schema.json definition.
+    Validates syntax (with repair), patches missing fields, and enforces schema types.
     """
     
     # =========================================================================
@@ -97,78 +104,78 @@ def validate_and_fix(input_json_str, schema_path):
         sys.exit(1)
 
     # =========================================================================
-    # 2. Parse the Input (Resilient Load)
+    # 2. Syntax Validation & Heuristic Repair
     # =========================================================================
-    # If the LLM sends 'None' or an empty string, we treat it as an empty dict
-    # so the Enforcer Loop can auto-generate the object entirely from defaults.
+    data = {}
+    
+    # Handle empty inputs
     if not input_json_str or input_json_str.strip() == "None":
-        data = {}
-    else:
+        input_json_str = "{}"
+
+    try:
+        # Attempt 1: Standard Load
+        data = json.loads(input_json_str)
+    except json.JSONDecodeError:
+        # Attempt 2: Heuristic Repair
+        print(f"WARNING: Invalid JSON detected. Attempting heuristic repair...", file=sys.stderr)
+        repaired_str = heuristic_repair(input_json_str)
         try:
-            data = json.loads(input_json_str)
-        except json.JSONDecodeError:
-            print("ERROR: Input is not valid JSON. Cannot validate.", file=sys.stderr)
+            data = json.loads(repaired_str)
+            print(f"SUCCESS: JSON repaired automatically.", file=sys.stderr)
+        except json.JSONDecodeError as e:
+            # Attempt 3: Fail Gracefully
+            print(f"SYNTAX ERROR: Could not repair JSON.", file=sys.stderr)
+            print(f"DETAILS: {e.msg}", file=sys.stderr)
             sys.exit(1)
 
     ordered_data = {}
     corrections = []
 
     # =========================================================================
-    # 3. The Enforcer Loop (Order-Preserving)
+    # 3. The Enforcer Loop (Schema Compliance)
     # =========================================================================
-    # We iterate over the schema fields, NOT the input keys. This ensures the 
-    # output JSON perfectly mirrors the architectural sequence of the schema.
     for field in schema.get('fields', []):
         name = field['name']
         dtype = field.get('type', 'string')
         is_required = field.get('required', False)
         schema_default = field.get('default', None)
 
-        # 3A. CHECK: Is the field missing from the LLM's output?
+        # 3A. CHECK: Is the field missing?
         if name not in data:
-            # Inject Default if the field is required OR if an optional field has a schema default
             if is_required or schema_default is not None:
                 final_value = schema_default if schema_default is not None else get_safe_default(dtype)
                 ordered_data[name] = final_value
                 corrections.append(f"MISSING FIELD '{name}': Injected default value '{final_value}' (Type: {dtype})")
         
-        # 3B. CHECK: The field exists. Validate and cast its type.
+        # 3B. CHECK: The field exists.
         else:
             val = data[name]
             
-            # Aggressive casting for common LLM mistakes (e.g., passing numbers as strings)
+            # Constraint Check: Type enforcement
             if dtype == "integer":
                 try:
                     if type(val) != int:
                         val = int(val)
                         corrections.append(f"TYPE FIX '{name}': Cast to integer.")
                 except (ValueError, TypeError):
-                    # Fallback to default if the string is uncastable (e.g., "port": "web")
                     fallback = schema_default if schema_default is not None else 0
                     val = fallback
                     corrections.append(f"TYPE ERROR '{name}': Could not cast. Reset to default '{fallback}'.")
             
-            # Map the validated/corrected value into the new ordered dictionary
             ordered_data[name] = val
 
-    # 3C. PASS-THROUGH: Preserve any extra fields hallucinated by the LLM
-    # that were not defined in the schema, appending them to the end.
+    # =========================================================================
+    # 4. Pass-Through
+    # =========================================================================
     for k, v in data.items():
         if k not in ordered_data:
             ordered_data[k] = v
 
     # =========================================================================
-    # 4. Stream Separation: The Standard Output (Clean Data)
+    # 5. Output Generation
     # =========================================================================
-    # stdout MUST only contain valid JSON. Do not print debug info here, 
-    # or it will corrupt the payload when piped to other tools.
     print(json.dumps(ordered_data, indent=4))
     
-    # =========================================================================
-    # 5. Stream Separation: The Standard Error (Telemetry)
-    # =========================================================================
-    # stderr is used as an out-of-band channel. The Host Agent captures this 
-    # and places it in the LLM's observation context so it learns from mistakes.
     if corrections:
         print(f"\n[SCHEMA ENFORCER REPORT]", file=sys.stderr)
         for c in corrections:
